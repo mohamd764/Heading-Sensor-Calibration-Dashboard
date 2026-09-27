@@ -1,0 +1,14 @@
+[project]
+name = "heading-sensor-calibration"
+version = "1.0.0"
+description = "Dash app for vessel heading sensor (gyrocompass) calibration from total-station Bow/Stem observations."
+readme = "README.md"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
