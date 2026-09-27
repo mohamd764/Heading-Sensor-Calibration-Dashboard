@@ -11,7 +11,7 @@ def sample_form():
     fill_ids = [o.component_id for o in dashboard.FILL_OUTPUTS]
     by_id = dict(zip(fill_ids, values))
     state_ids = [s.component_id for s in dashboard.FORM_STATES]
-    return [by_id[i] for i in state_ids]
+    return [by_id.get(i) for i in state_ids]
 
 
 def test_form_states_and_keys_align():
@@ -25,6 +25,15 @@ def test_submit_with_sample_data():
     assert "Bow/Stem heading comparisons (C-O): 10" in text
     assert "Mean (C-O): +0.3" in text
     assert "WGS 84 / UTM zone 15N" in str(details)
+    assert "Alert" not in str(stats)
+
+
+def test_submit_warns_when_zone_disagrees_with_approx_position():
+    values = sample_form()
+    values[dashboard.FORM_KEYS.index("approx_lat")] = 37.75
+    values[dashboard.FORM_KEYS.index("approx_lon")] = -122.4
+    _, stats, _ = dashboard.submit_data(1, *values)
+    assert "Approximate position is in UTM zone 10N, but zone 15N is selected." in str(stats)
 
 
 def test_submit_reports_missing_crs():
@@ -69,4 +78,8 @@ def test_grid_value_callback():
     )
     assert convergence.startswith("-001° 17'")
     assert warnings is None
+    *_, warnings = dashboard.update_grid_values(
+        250000, 3300000, 249879.512, 3300310.184, "utm", "15", "North", None, 37.75, -122.4
+    )
+    assert "zone 10N" in str(warnings)
     assert dashboard.update_grid_values(1, 1, 2, 2, "epsg", None, None, None)[0] == "N/A"

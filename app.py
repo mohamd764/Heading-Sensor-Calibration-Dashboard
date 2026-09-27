@@ -19,6 +19,7 @@ from heading_calibration.geodesy import (
     dms_to_decimal,
     resolve_projected_crs,
     utm_zone_from_lonlat,
+    utm_zone_mismatch,
 )
 from heading_calibration.report import build_report_html, html_to_pdf, stats_lines
 
@@ -185,7 +186,10 @@ app.layout = dbc.Container([
 
 # ------------------------------------------------------------------ helpers
 
-CRS_STATES = [State("crs-mode", "value"), State("utm-zone", "value"), State("hemisphere", "value"), State("epsg", "value")]
+CRS_STATES = [
+    State("crs-mode", "value"), State("utm-zone", "value"), State("hemisphere", "value"), State("epsg", "value"),
+    State("approx-lat", "value"), State("approx-lon", "value"),
+]
 FORM_STATES = (
     [State(fid, "value") for fid, _ in JOB_FIELDS]
     + [State("date", "date"), State("device-name", "value")]
@@ -199,7 +203,7 @@ FORM_STATES = (
 )
 FORM_KEYS = (
     [fid.replace("-", "_") for fid, _ in JOB_FIELDS]
-    + ["date", "device_name", "crs_mode", "zone", "hemisphere", "epsg",
+    + ["date", "device_name", "crs_mode", "zone", "hemisphere", "epsg", "approx_lat", "approx_lon",
        "station", "e1", "n1", "h1", "backsight", "e2", "n2", "h2", "bs_deg", "bs_min", "bs_sec", "rows"]
 )
 
@@ -228,6 +232,9 @@ def compute(form):
     if backsight_dd is None:
         raise ValueError("Backsight observation (DMS) is invalid.")
     grid = calculate_grid_values(form["e1"], form["n1"], form["e2"], form["n2"], crs)
+    mismatch = utm_zone_mismatch(crs, form.get("approx_lon"), form.get("approx_lat"))
+    if mismatch:
+        grid.warnings.insert(0, mismatch)
     result = reduce_observations(form["rows"], form["e1"], form["n1"], backsight_dd, grid)
 
     job_details = {label: form[fid.replace("-", "_")] for fid, label in JOB_FIELDS}
@@ -267,8 +274,10 @@ def html_table(header, rows):
     Input("utm-zone", "value"),
     Input("hemisphere", "value"),
     Input("epsg", "value"),
+    Input("approx-lat", "value"),
+    Input("approx-lon", "value"),
 )
-def update_grid_values(e1, n1, e2, n2, mode, zone, hemisphere, epsg):
+def update_grid_values(e1, n1, e2, n2, mode, zone, hemisphere, epsg, approx_lat=None, approx_lon=None):
     try:
         crs = crs_from_inputs(mode, zone, hemisphere, epsg)
     except ValueError as exc:
@@ -280,7 +289,9 @@ def update_grid_values(e1, n1, e2, n2, mode, zone, hemisphere, epsg):
         grid = calculate_grid_values(e1, n1, e2, n2, crs)
     except ValueError as exc:
         return "N/A", "N/A", status, dbc.Alert(str(exc), color="danger")
-    warnings = [dbc.Alert(w, color="warning") for w in grid.warnings] or None
+    mismatch = utm_zone_mismatch(crs, approx_lon, approx_lat)
+    messages = ([mismatch] if mismatch else []) + grid.warnings
+    warnings = [dbc.Alert(w, color="warning") for w in messages] or None
     return grid.bearing_dms, grid.convergence_dms, status, warnings
 
 
@@ -353,7 +364,10 @@ def submit_data(n_clicks, *values):
     results = html_table(RESULT_COLUMNS, [[r[c] for c in RESULT_COLUMNS] for r in rows]) if rows else html.Div(
         "No valid observations to display."
     )
-    stats = html.Ul([html.Li(s) for s in stats_lines(result)], className="fw-bold")
+    stats = html.Div(
+        [dbc.Alert(w, color="warning") for w in result.warnings]
+        + [html.Ul([html.Li(s) for s in stats_lines(result)], className="fw-bold")]
+    )
     details = html_table(["Field", "Value"], [[k, "" if v is None else str(v)] for k, v in job_details.items()])
     return results, stats, details
 

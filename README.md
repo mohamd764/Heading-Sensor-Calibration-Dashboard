@@ -20,8 +20,10 @@ export the result as a PDF report.
   EPSG code** (NAD83 State Plane, NAD83 UTM, MGA and so on). A helper suggests the UTM zone from
   an approximate latitude and longitude.
 - Rigorous grid convergence for any conformal projection, computed with PROJ via `pyproj`.
-- Live grid bearing and convergence display, with warnings for implausible zone and coordinate
-  combinations.
+- Live grid bearing and convergence display. The app warns when the selected UTM zone disagrees
+  with an approximate latitude and longitude, or when an easting falls outside the normal UTM
+  range. A UTM easting and northing look identical in every zone, so an approximate position is
+  the only independent check of the zone.
 - 20-row Bow/Stem observation table, per-pair calculated heading, and C − O mean, sample standard
   deviation and range.
 - One-click **PDF report** (US Letter, landscape).

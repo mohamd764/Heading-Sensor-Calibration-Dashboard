@@ -13,6 +13,7 @@ from heading_calibration.geodesy import (
     resolve_projected_crs,
     utm_epsg,
     utm_zone_from_lonlat,
+    utm_zone_mismatch,
 )
 
 ARCSEC = 1 / 3600
@@ -129,10 +130,20 @@ def test_resolve_crs_validation():
             resolve_projected_crs(**kwargs)
 
 
-def test_wrong_zone_warning():
+def test_implausible_easting_warning():
     crs = resolve_projected_crs(zone=15, hemisphere="North")
     assert calculate_grid_values(500_000, 3_300_000, 500_010, 3_300_100, crs).warnings == []
     assert calculate_grid_values(50_000, 3_300_000, 50_010, 3_300_100, crs).warnings
+
+
+def test_utm_zone_mismatch():
+    crs = resolve_projected_crs(zone=15, hemisphere="North")
+    assert utm_zone_mismatch(crs, -95.6, 29.8) is None
+    assert utm_zone_mismatch(crs, None, 29.8) is None
+    assert "zone 10N" in utm_zone_mismatch(crs, -122.4, 37.75)
+    assert "zone 15S" in utm_zone_mismatch(crs, -95.6, -29.8)
+    assert utm_zone_mismatch(resolve_projected_crs(epsg=28355), 147.0, -37.9) is None
+    assert utm_zone_mismatch(resolve_projected_crs(epsg=2227), 0, 0) is None
 
 
 def test_grid_bearing_quadrants():

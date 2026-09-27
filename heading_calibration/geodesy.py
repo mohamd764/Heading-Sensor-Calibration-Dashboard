@@ -94,6 +94,25 @@ def utm_epsg(zone, hemisphere):
     return (32600 if hemisphere == "North" else 32700) + zone
 
 
+def utm_zone_mismatch(crs, approx_lon, approx_lat):
+    """Warning text if a UTM CRS disagrees with an approximate WGS84 position, else None.
+
+    A UTM easting/northing looks identical in every zone, so an independent
+    approximate position is the only way to validate the zone choice.
+    """
+    if not crs.utm_zone or approx_lon is None or approx_lat is None:
+        return None
+    try:
+        zone, hemisphere = utm_zone_from_lonlat(float(approx_lon), float(approx_lat))
+    except (TypeError, ValueError):
+        return None
+    selected = crs.utm_zone
+    expected = f"{zone}{'N' if hemisphere == 'North' else 'S'}"
+    if selected != expected:
+        return f"Approximate position is in UTM zone {expected}, but zone {selected} is selected."
+    return None
+
+
 def resolve_projected_crs(zone=None, hemisphere=None, epsg=None):
     """Build the projected CRS of the survey coordinates.
 
@@ -171,11 +190,13 @@ def calculate_grid_values(e1, n1, e2, n2, crs):
 
     warnings = []
     if crs.utm_zone:
+        # Offset from the central meridian is the same whichever zone is chosen, so this
+        # flags implausible eastings, not a wrong zone (see utm_zone_mismatch for that).
         cm = int(crs.utm_zone[:-1]) * 6 - 183
         if abs(normalize_angle(lon - cm)) > 3.5:
             warnings.append(
-                f"Station is {abs(normalize_angle(lon - cm)):.1f}° from the zone's central "
-                "meridian; check that the UTM zone is correct."
+                f"Station is {abs(normalize_angle(lon - cm)):.1f}° from the central meridian, "
+                "outside the normal UTM zone width; check the easting."
             )
         if not 100_000 <= e1 <= 900_000:
             warnings.append("Easting is outside the normal UTM range (100 000 - 900 000 m).")
